@@ -1,0 +1,69 @@
+cache:
+    paths:
+        - .gradle/
+        - gradle-7.2/
+        - gradle/
+        - gradlew
+
+default:
+  interruptible: true
+  image: registry.videolan.org/vlc-debian-android:20230614051113
+  tags:
+    - amd64
+    - docker
+
+stages:
+  - build
+
+# Rebuilds libvlc JNI
+.build-libvlc-base:
+    stage: build
+    script: |
+        rm -rf vlc
+        ./buildsystem/get-vlc.sh
+        ./buildsystem/compile-libvlc.sh -a ${ARCH}
+    rules:
+        # Explicitely refuse to build anything that would also trigger
+        # a medialib build
+      - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+        changes:
+          - buildsystem/**/*
+        when: never
+      - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+        changes:
+          - libvlc/**/*
+      - if: '$CI_PIPELINE_SOURCE == "push"'
+    variables:
+        MAKEFLAGS: -j8
+
+#################################
+# Template config instantiation #
+#################################
+
+build-libvlc-arm64:
+    extends: .build-libvlc-base
+    variables:
+        ARCH: arm64
+
+build-libvlc-armv7:
+    extends: .build-libvlc-base
+    variables:
+        ARCH: arm
+
+build-libvlc-x86:
+    extends: .build-libvlc-base
+    variables:
+        ARCH: x86
+
+build-libvlc-x86_64:
+    extends: .build-libvlc-base
+    variables:
+        ARCH: x86_64
+
+#
+.build-release-libs-base:
+    rules:
+      - if: '$CI_COMMIT_TAG =~ /^libvlc-.*$/'
+    variables:
+      M2_REPO: "$CI_PROJECT_DIR/aars/repository"
+
